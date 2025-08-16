@@ -493,3 +493,18 @@ footer {
     height: 36px;
   }
 }
+/* Force dropdown to work on mobile */
+.currency-selector {
+  position: relative;
+  z-index: 9999; /* higher than header, charts, etc. */
+}
+
+.currency-selector select {
+  -webkit-appearance: menulist !important;
+  -moz-appearance: menulist !important;
+  appearance: menulist !important;
+  background: rgba(30, 41, 59, 1);
+  pointer-events: auto !important;
+  user-select: auto !important;
+  touch-action: auto !important;
+}
