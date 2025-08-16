@@ -56,6 +56,11 @@ header h1 {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
+  /* Ensure proper touch interaction on mobile */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
 }
 
 .currency-selector select:hover {
@@ -432,9 +437,25 @@ footer {
     padding: 12px 16px;
   }
 
-  /* ONLY mobile fix - use native select on mobile */
+  /* Mobile currency selector fixes */
+  .currency-selector {
+    position: relative;
+    z-index: 1000;
+  }
+  
   .currency-selector select {
     font-size: 16px; /* Prevent iOS zoom */
+    min-height: 44px; /* Ensure proper touch target size */
+    padding: 12px 16px;
+    border-radius: 8px;
+    /* Remove any conflicting styles on mobile */
+    -webkit-appearance: menulist;
+    -moz-appearance: menulist;
+    appearance: menulist;
+    /* Ensure it's clickable */
+    pointer-events: auto;
+    position: relative;
+    z-index: 1001;
   }
 
   .container {
