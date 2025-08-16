@@ -21,27 +21,410 @@ const MONORAIL_CONFIG = {
   quoteEndpoint: "https://testnet-pathfinder.monorail.xyz/v4"
 };
 
-const openOceanAPI = "https://open-api.openocean.finance/v4/monad/tokenList";
-const nadFunListAPI = "/api/nad-tokens";
-const monorailTokensAPI = "/api/monorail-tokens"; 
-const monorailWalletAPI = "/api/monorail-wallet"; 
-
-let provider, signer, account;
-let chartInstance;
-let exchangeRates = { USD: 1 };
-let currentCurrency = 'USD';
-let originalPortfolioData = null;
-let tokenMetadata = {};
-let monUsdPrice = 0;
-
-// Cache for performance optimization
-const cache = {
-  tokenMetadata: new Map(),
-  balances: new Map(),
-  prices: new Map(),
-  lastUpdate: 0,
-  CACHE_DURATION: 30000 // 30 seconds
+// Enhanced API configuration with proper paths
+const API_CONFIG = {
+  openOcean: "https://open-api.openocean.finance/v4/monad/tokenList",
+  nadFun: "/api/nad-tokens",
+  monorailTokens: "/api/monorail-tokens", 
+  monorailWallet: "/api/monorail-wallet"
 };
+
+// Enhanced Monorail API functions with better error handling
+async function fetchMonorailTokens() {
+  console.log('🔄 Fetching Monorail tokens...');
+  const startTime = Date.now();
+  
+  try {
+    console.log(`Making request to: ${API_CONFIG.monorailTokens}`);
+    
+    const response = await fetch(API_CONFIG.monorailTokens, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log(`Monorail tokens response status: ${response.status}`);
+    console.log(`Monorail tokens response headers:`, [...response.headers.entries()]);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Monorail tokens error response:`, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Raw Monorail tokens data:', data);
+    
+    let addedCount = 0;
+    
+    if (data && Array.isArray(data)) {
+      data.forEach((token, index) => {
+        try {
+          const addr = token.address?.toLowerCase();
+          if (!addr) {
+            console.warn(`Token ${index} missing address:`, token);
+            return;
+          }
+          
+          if (tokenMetadata[addr]) {
+            console.log(`Token ${token.symbol} already exists, skipping...`);
+            return;
+          }
+          
+          const priceUSD = parseFloat(token.priceUSD || token.price || 0);
+          
+          tokenMetadata[addr] = {
+            symbol: token.symbol || 'UNKNOWN',
+            name: token.name || token.symbol || 'Unknown Token',
+            decimals: parseInt(token.decimals) || 18,
+            logo: token.logoURI || token.icon || '',
+            usd: priceUSD,
+            verified: true,
+            source: 'monorail'
+          };
+          
+          cache.tokenMetadata.set(addr, tokenMetadata[addr]);
+          addedCount++;
+          
+          if (token.symbol === "MON") {
+            monUsdPrice = priceUSD;
+            console.log(`MON price set to: $${monUsdPrice}`);
+          }
+          
+          console.log(`Added Monorail token: ${token.symbol} ($${priceUSD})`);
+          
+        } catch (tokenError) {
+          console.warn(`Error processing Monorail token ${index}:`, tokenError, token);
+        }
+      });
+    } else {
+      console.warn('Unexpected Monorail data structure:', typeof data, data);
+    }
+    
+    const loadTime = Date.now() - startTime;
+    console.log(`✅ Monorail tokens loaded: ${addedCount} tokens in ${loadTime}ms`);
+    return addedCount;
+    
+  } catch (error) {
+    console.error('❌ Failed to fetch Monorail tokens:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    });
+    return 0;
+  }
+}
+
+async function fetchNadFunTokens() {
+  console.log('🔄 Fetching nad.fun tokens...');
+  const startTime = Date.now();
+  
+  try {
+    console.log(`Making request to: ${API_CONFIG.nadFun}`);
+    
+    const response = await fetch(API_CONFIG.nadFun, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log(`nad.fun response status: ${response.status}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`nad.fun error response:`, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+    const json = await response.json();
+    console.log('Raw nad.fun data structure:', {
+      hasOrderToken: !!json.order_token,
+      orderTokenLength: json.order_token?.length,
+      keys: Object.keys(json)
+    });
+    
+    if (json.order_token && Array.isArray(json.order_token)) {
+      let addedCount = 0;
+      
+      json.order_token.forEach((ot, index) => {
+        try {
+          const addr = ot.token_info?.token_address?.toLowerCase();
+          if (!addr) {
+            console.warn(`nad.fun token ${index} missing address:`, ot);
+            return;
+          }
+          
+          if (tokenMetadata[addr]) {
+            console.log(`nad.fun token ${ot.token_info?.symbol} already exists, skipping...`);
+            return;
+          }
+          
+          const monPrice = parseFloat(ot.market_info?.price || 0);
+          const usdPrice = monUsdPrice && monPrice ? monPrice * monUsdPrice : 0;
+          
+          tokenMetadata[addr] = {
+            symbol: ot.token_info.symbol || 'UNKNOWN',
+            name: ot.token_info.name || ot.token_info.symbol || 'Unknown Token',
+            decimals: parseInt(ot.token_info.decimals) || 18,
+            logo: ot.token_info.image_uri || '',
+            usd: usdPrice,
+            verified: false,
+            source: 'nadfun'
+          };
+          
+          cache.tokenMetadata.set(addr, tokenMetadata[addr]);
+          addedCount++;
+          
+          console.log(`Added nad.fun token: ${ot.token_info.symbol} (${monPrice} MON = $${usdPrice})`);
+          
+        } catch (tokenError) {
+          console.warn(`Error processing nad.fun token ${index}:`, tokenError, ot);
+        }
+      });
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`✅ nad.fun tokens loaded: ${addedCount} tokens in ${loadTime}ms`);
+      return addedCount;
+      
+    } else {
+      console.warn('nad.fun response missing order_token array:', json);
+      return 0;
+    }
+    
+  } catch (error) {
+    console.error('❌ Failed to fetch nad.fun tokens:', error);
+    return 0;
+  }
+}
+
+async function fetchOpenOceanTokens() {
+  console.log('🔄 Fetching OpenOcean tokens...');
+  const startTime = Date.now();
+  
+  try {
+    const response = await fetch(API_CONFIG.openOcean);
+    const data = await response.json();
+    
+    console.log('OpenOcean response:', {
+      code: data.code,
+      dataLength: data.data?.length,
+      success: data.code === 200
+    });
+    
+    if (data.code === 200 && Array.isArray(data.data)) {
+      let addedCount = 0;
+      
+      data.data.forEach((token, index) => {
+        try {
+          const addr = token.address?.toLowerCase();
+          if (!addr) return;
+          
+          if (!tokenMetadata[addr]) {
+            const usdPrice = parseFloat(token.usd || 0);
+            
+            tokenMetadata[addr] = {
+              symbol: token.symbol,
+              name: token.name,
+              decimals: parseInt(token.decimals) || 18,
+              logo: token.icon,
+              usd: usdPrice,
+              verified: true,
+              source: 'openocean'
+            };
+            
+            cache.tokenMetadata.set(addr, tokenMetadata[addr]);
+            addedCount++;
+            
+            if (token.symbol === "MON" && !monUsdPrice) {
+              monUsdPrice = usdPrice;
+              console.log(`MON price set from OpenOcean: $${monUsdPrice}`);
+            }
+          }
+        } catch (tokenError) {
+          console.warn(`Error processing OpenOcean token ${index}:`, tokenError);
+        }
+      });
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`✅ OpenOcean tokens loaded: ${addedCount} tokens in ${loadTime}ms`);
+      return addedCount;
+    }
+    
+    return 0;
+  } catch (error) {
+    console.error('❌ Failed to fetch OpenOcean tokens:', error);
+    return 0;
+  }
+}
+
+async function fetchMonorailWalletBalances(walletAddress) {
+  if (!walletAddress) {
+    console.error('No wallet address provided to fetchMonorailWalletBalances');
+    return null;
+  }
+  
+  console.log(`🔄 Fetching Monorail wallet balances for ${walletAddress}...`);
+  
+  try {
+    const url = `${API_CONFIG.monorailWallet}/${walletAddress}`;
+    console.log(`Making wallet balance request to: ${url}`);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log(`Monorail wallet response status: ${response.status}`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`✅ Monorail wallet balances received:`, {
+        isArray: Array.isArray(data),
+        length: data?.length,
+        firstItem: data?.[0]
+      });
+      return data;
+    } else {
+      const errorText = await response.text();
+      console.error(`Monorail wallet error (${response.status}):`, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+  } catch (error) {
+    console.warn('❌ Failed to fetch Monorail wallet balances:', error);
+    return null;
+  }
+}
+
+// Enhanced token metadata initialization with better debugging
+async function initTokenMetadata() {
+  console.log('🚀 Initializing token metadata with enhanced debugging...');
+  const startTime = Date.now();
+  
+  try {
+    // Check cache first
+    if (cache.lastUpdate && (Date.now() - cache.lastUpdate) < cache.CACHE_DURATION) {
+      console.log('📋 Using cached token metadata');
+      tokenMetadata = Object.fromEntries(cache.tokenMetadata);
+      return;
+    }
+    
+    // Show loading indicator
+    const tokenCount = document.getElementById("tokenCount");
+    if (tokenCount) {
+      const originalText = tokenCount.textContent;
+      tokenCount.textContent = "Loading token data...";
+    }
+    
+    // Load APIs with detailed logging
+    console.log('📡 Starting parallel API loading...');
+    
+    const promises = [
+      fetchOpenOceanTokens(),
+      fetchMonorailTokens(), 
+      fetchNadFunTokens()
+    ];
+    
+    const results = await Promise.allSettled(promises);
+    
+    // Process results with detailed logging
+    results.forEach((result, index) => {
+      const apiNames = ['OpenOcean', 'Monorail', 'nad.fun'];
+      if (result.status === 'fulfilled') {
+        console.log(`✅ ${apiNames[index]} loaded ${result.value} tokens`);
+      } else {
+        console.error(`❌ ${apiNames[index]} failed:`, result.reason);
+      }
+    });
+    
+    const totalAdded = results
+      .filter(result => result.status === 'fulfilled')
+      .reduce((sum, result) => sum + (result.value || 0), 0);
+    
+    // Set fallback MON price if still not found
+    if (!monUsdPrice || monUsdPrice === 0) {
+      console.warn("⚠️ MON price not found from any API, using fallback");
+      monUsdPrice = 0.01; // Fallback price
+    }
+    
+    const totalTokens = Object.keys(tokenMetadata).length;
+    const loadTime = Date.now() - startTime;
+    
+    console.log(`🎉 Token metadata initialization complete:`);
+    console.log(`   - Total tokens: ${totalTokens}`);
+    console.log(`   - Load time: ${loadTime}ms`);
+    console.log(`   - MON price: $${monUsdPrice}`);
+    
+    // Update cache
+    cache.lastUpdate = Date.now();
+    
+    // Reset the token count text
+    if (tokenCount) {
+      tokenCount.textContent = `${totalTokens} tokens loaded`;
+    }
+    
+    // Log breakdown by source
+    const sources = {};
+    Object.values(tokenMetadata).forEach(token => {
+      sources[token.source] = (sources[token.source] || 0) + 1;
+    });
+    console.log('📊 Tokens by source:', sources);
+    
+    // Log sample tokens for debugging
+    console.log('📝 Sample loaded tokens:');
+    Object.entries(tokenMetadata).slice(0, 5).forEach(([addr, token]) => {
+      console.log(`   ${token.symbol}: $${token.usd} (${token.source})`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Error initializing token metadata:', error);
+    const tokenCount = document.getElementById("tokenCount");
+    if (tokenCount) {
+      tokenCount.textContent = "Error loading tokens";
+    }
+  }
+}
+
+// Test API endpoints function (call this from console to debug)
+async function testAPIEndpoints() {
+  console.log('🧪 Testing API endpoints...');
+  
+  const tests = [
+    { name: 'nad.fun', url: API_CONFIG.nadFun },
+    { name: 'Monorail tokens', url: API_CONFIG.monorailTokens },
+    { name: 'OpenOcean', url: API_CONFIG.openOcean }
+  ];
+  
+  for (const test of tests) {
+    try {
+      console.log(`Testing ${test.name}: ${test.url}`);
+      const response = await fetch(test.url);
+      console.log(`${test.name} status: ${response.status}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`${test.name} data preview:`, {
+          type: typeof data,
+          isArray: Array.isArray(data),
+          keys: typeof data === 'object' ? Object.keys(data).slice(0, 5) : 'N/A'
+        });
+      }
+    } catch (error) {
+      console.error(`${test.name} failed:`, error.message);
+    }
+  }
+}
+
+// Make testAPIEndpoints available globally for debugging
+window.testAPIEndpoints = testAPIEndpoints;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -611,10 +994,11 @@ async function connectWallet() {
 }
 
 // Super optimized portfolio loading
+// Enhanced portfolio loading with proper rate limiting and error handling
 async function loadPortfolio() {
   try {
     showLoading(true);
-    console.log("🚀 Loading portfolio with maximum speed...");
+    console.log("🚀 Loading portfolio with rate limiting...");
     const startTime = Date.now();
     
     // Wait for token metadata to be loaded if still loading
@@ -632,28 +1016,39 @@ async function loadPortfolio() {
     const tokenPricesForStorage = [];
     const tokenUSDValuesForStorage = [];
 
-    // Try to get balances from Monorail first (faster)
-    const monorailBalances = await fetchMonorailWalletBalances(account);
+    // Try Monorail balances first (if proxy available)
+    let monorailBalances = null;
+    try {
+      monorailBalances = await fetchMonorailWalletBalances(account);
+    } catch (error) {
+      console.log("Monorail balances not available, will use direct RPC calls");
+    }
     
     // Get all token addresses from metadata
     const tokenAddresses = Object.keys(tokenMetadata);
     console.log(`Checking ${tokenAddresses.length} tokens for balances...`);
 
-    // Create batch requests for better performance
-    const BATCH_SIZE = 10;
+    // Process tokens with rate limiting to avoid 429 errors
+    const BATCH_SIZE = 5; // Reduced batch size
+    const DELAY_BETWEEN_BATCHES = 1000; // 1 second delay between batches
+    
     const batches = [];
     for (let i = 0; i < tokenAddresses.length; i += BATCH_SIZE) {
       batches.push(tokenAddresses.slice(i, i + BATCH_SIZE));
     }
 
-    // Process batches in parallel
-    const batchPromises = batches.map(batch => processBatch(batch, monorailBalances));
-    const batchResults = await Promise.allSettled(batchPromises);
-    
-    // Collect results
-    for (const result of batchResults) {
-      if (result.status === 'fulfilled') {
-        for (const tokenData of result.value) {
+    console.log(`Processing ${batches.length} batches of ${BATCH_SIZE} tokens each...`);
+
+    // Process batches sequentially with delays
+    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+      const batch = batches[batchIndex];
+      console.log(`Processing batch ${batchIndex + 1}/${batches.length}...`);
+      
+      try {
+        const batchResult = await processBatchWithRetry(batch, monorailBalances, 3);
+        
+        // Process results
+        for (const tokenData of batchResult) {
           if (tokenData.balance > 0) {
             tokensWithBalance++;
             const usdValue = tokenData.balance * tokenData.price;
@@ -677,6 +1072,15 @@ async function loadPortfolio() {
             tokenUSDValuesForStorage.push(usdValue);
           }
         }
+        
+        // Delay between batches to respect rate limits
+        if (batchIndex < batches.length - 1) {
+          await sleep(DELAY_BETWEEN_BATCHES);
+        }
+        
+      } catch (error) {
+        console.warn(`Batch ${batchIndex + 1} failed:`, error.message);
+        // Continue with next batch instead of failing completely
       }
     }
 
@@ -694,33 +1098,213 @@ async function loadPortfolio() {
     };
 
     // Update UI
-    const totalBalanceEl = document.getElementById("totalBalance");
-    const tokenCountEl = document.getElementById("tokenCount");
-    const tokenListEl = document.getElementById("tokenList");
-    
-    if (totalBalanceEl) totalBalanceEl.textContent = formatCurrency(totalUSD);
-    if (tokenCountEl) tokenCountEl.textContent = `${tokensWithBalance} tokens with balance`;
-    if (tokenListEl) tokenListEl.innerHTML = tokenElements.join("");
-
-    // Update chart
-    if (chartLabels.length > 0) {
-      renderChart(chartLabels, chartValues, chartColors);
-      const emptyChart = document.getElementById("emptyChart");
-      if (emptyChart) emptyChart.style.display = "none";
-    } else {
-      const emptyChart = document.getElementById("emptyChart");
-      if (emptyChart) emptyChart.style.display = "block";
-      if (chartInstance) {
-        chartInstance.destroy();
-        chartInstance = null;
-      }
-    }
+    updatePortfolioUI(totalUSD, tokensWithBalance, tokenElements, chartLabels, chartValues, chartColors);
 
   } catch (error) {
     console.error("Portfolio load error:", error);
     showError(error.message || "Failed to load portfolio data");
   } finally {
     showLoading(false);
+  }
+}
+
+// Enhanced batch processing with retry logic
+async function processBatchWithRetry(tokenAddresses, monorailBalances, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await processBatchWithRateLimit(tokenAddresses, monorailBalances);
+    } catch (error) {
+      console.warn(`Batch attempt ${attempt} failed:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Exponential backoff: 2s, 4s, 8s
+      const delay = Math.pow(2, attempt) * 1000;
+      console.log(`Retrying batch in ${delay}ms...`);
+      await sleep(delay);
+    }
+  }
+}
+
+// Process batch with built-in rate limiting
+async function processBatchWithRateLimit(tokenAddresses, monorailBalances) {
+  const results = [];
+  const DELAY_BETWEEN_CALLS = 200; // 200ms between individual token calls
+  
+  for (let i = 0; i < tokenAddresses.length; i++) {
+    const tokenAddress = tokenAddresses[i];
+    const token = tokenMetadata[tokenAddress];
+    let formattedBalance = 0;
+    let tokenPrice = token.usd || 0;
+    
+    try {
+      // Check Monorail balances first if available
+      if (monorailBalances && Array.isArray(monorailBalances)) {
+        const monorailBalance = monorailBalances.find(b => 
+          b.contractAddress?.toLowerCase() === tokenAddress.toLowerCase()
+        );
+        
+        if (monorailBalance) {
+          formattedBalance = parseFloat(monorailBalance.balance || 0);
+        }
+      }
+      
+      // Only make RPC call if no balance found and not rate limited
+      if (formattedBalance === 0) {
+        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+          // Native MON token
+          const rawBalance = await provider.getBalance(account);
+          formattedBalance = Number(ethers.utils.formatEther(rawBalance));
+        } else {
+          // ERC-20 token with error handling for invalid contracts
+          try {
+            const tokenContract = new ethers.Contract(
+              tokenAddress, 
+              ["function balanceOf(address owner) view returns (uint256)"], 
+              provider
+            );
+            
+            const rawBalance = await tokenContract.balanceOf(account);
+            formattedBalance = Number(ethers.utils.formatUnits(rawBalance, token.decimals));
+          } catch (contractError) {
+            // Skip invalid contracts or rate limited calls
+            if (contractError.code === 'CALL_EXCEPTION' || contractError.code === -32603) {
+              console.warn(`Skipping ${token.symbol} due to contract error:`, contractError.message);
+              formattedBalance = 0;
+            } else {
+              throw contractError;
+            }
+          }
+        }
+      }
+
+      // Get better price if available
+      if (tokenPrice === 0 && formattedBalance > 0) {
+        tokenPrice = await getBestTokenPrice(tokenAddress, formattedBalance);
+      }
+      
+      results.push({
+        address: tokenAddress,
+        token: token,
+        balance: formattedBalance,
+        price: tokenPrice
+      });
+
+      // Delay between individual token calls
+      if (i < tokenAddresses.length - 1) {
+        await sleep(DELAY_BETWEEN_CALLS);
+      }
+
+    } catch (tokenError) {
+      console.warn(`Error checking balance for ${token.symbol}:`, tokenError.message);
+      results.push({
+        address: tokenAddress,
+        token: token,
+        balance: 0,
+        price: tokenPrice
+      });
+    }
+  }
+  
+  return results;
+}
+
+// Enhanced RPC configuration with fallback
+async function initializeProvider() {
+  const rpcUrls = [
+    "https://rpc-testnet.monadinfra.com",
+    "https://rpc.ankr.com/monad_testnet",
+    // Removed the rate-limited endpoint: "https://testnet-rpc.monad.xyz"
+  ];
+  
+  for (const rpcUrl of rpcUrls) {
+    try {
+      const testProvider = new ethers.providers.JsonRpcProvider(rpcUrl);
+      await testProvider.getNetwork(); // Test the connection
+      
+      console.log(`Successfully connected to RPC: ${rpcUrl}`);
+      return testProvider;
+    } catch (error) {
+      console.warn(`RPC ${rpcUrl} failed:`, error.message);
+    }
+  }
+  
+  throw new Error("All RPC endpoints failed");
+}
+
+// Utility function for delays
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Update UI helper function
+function updatePortfolioUI(totalUSD, tokensWithBalance, tokenElements, chartLabels, chartValues, chartColors) {
+  const totalBalanceEl = document.getElementById("totalBalance");
+  const tokenCountEl = document.getElementById("tokenCount");
+  const tokenListEl = document.getElementById("tokenList");
+  
+  if (totalBalanceEl) totalBalanceEl.textContent = formatCurrency(totalUSD);
+  if (tokenCountEl) tokenCountEl.textContent = `${tokensWithBalance} tokens with balance`;
+  if (tokenListEl) tokenListEl.innerHTML = tokenElements.join("");
+
+  // Update chart
+  if (chartLabels.length > 0) {
+    renderChart(chartLabels, chartValues, chartColors);
+    const emptyChart = document.getElementById("emptyChart");
+    if (emptyChart) emptyChart.style.display = "none";
+  } else {
+    const emptyChart = document.getElementById("emptyChart");
+    if (emptyChart) emptyChart.style.display = "block";
+    if (chartInstance) {
+      chartInstance.destroy();
+      chartInstance = null;
+    }
+  }
+}
+
+// Modified connect wallet to use better RPC
+async function connectWallet() {
+  if (!window.ethereum) {
+    showError("MetaMask is required. Please install MetaMask to continue.");
+    return;
+  }
+
+  try {
+    const connectBtn = document.getElementById("connectBtn");
+    if (connectBtn) {
+      connectBtn.disabled = true;
+      connectBtn.textContent = "Connecting...";
+    }
+
+    await ensureMonadNetwork();
+
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts found");
+    }
+
+    account = accounts[0];
+    
+    // Use the enhanced provider initialization
+    try {
+      provider = await initializeProvider();
+    } catch (providerError) {
+      console.warn("Custom RPC failed, falling back to MetaMask provider");
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+    }
+    
+    signer = provider.getSigner();
+
+    updateConnectedState();
+    console.log("Connected to:", account);
+    await loadPortfolio();
+
+  } catch (error) {
+    console.error("Connection error:", error);
+    showError(error.message || "Failed to connect wallet");
+    updateConnectedState();
   }
 }
 
