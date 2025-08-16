@@ -46,10 +46,6 @@ header h1 {
   gap: 16px;
 }
 
-.currency-selector {
-  position: relative;
-}
-
 .currency-selector select {
   background: rgba(30, 41, 59, 0.8);
   color: #e6edf3;
@@ -60,15 +56,6 @@ header h1 {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  min-width: 85px;
-  padding-right: 30px;
-  background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%23e6edf3" d="M6 8.5L2.5 5h7L6 8.5z"/></svg>');
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 12px;
 }
 
 .currency-selector select:hover {
@@ -439,38 +426,15 @@ footer {
   font-size: 0.9rem;
 }
 
-/* Mobile Responsive Design */
+/* Responsive Design */
 @media (max-width: 768px) {
   .header-content {
     padding: 12px 16px;
-    flex-wrap: wrap;
-    gap: 8px;
   }
 
-  .header-right {
-    gap: 12px;
-  }
-
-  /* Mobile Currency Selector Fix */
+  /* ONLY mobile fix - use native select on mobile */
   .currency-selector select {
-    /* Prevent zoom on iOS */
-    font-size: 16px;
-    min-width: 90px;
-    padding: 10px 30px 10px 12px;
-    /* Use native dropdown on mobile for better UX */
-    -webkit-appearance: menulist;
-    -moz-appearance: menulist;
-    appearance: menulist;
-    background-image: none; /* Remove custom arrow on mobile */
-    padding-right: 12px;
-  }
-
-  /* Ensure dropdown works on touch devices */
-  .currency-selector select:active,
-  .currency-selector select:focus {
-    -webkit-appearance: menulist;
-    -moz-appearance: menulist;
-    appearance: menulist;
+    font-size: 16px; /* Prevent iOS zoom */
   }
 
   .container {
@@ -506,38 +470,5 @@ footer {
   .token-icon {
     width: 36px;
     height: 36px;
-  }
-}
-
-/* Additional mobile responsiveness for very small screens */
-@media (max-width: 480px) {
-  header h1 {
-    font-size: 1.5rem;
-  }
-
-  .header-right {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .currency-selector {
-    order: 3;
-    width: 100%;
-    margin-top: 8px;
-  }
-
-  .currency-selector select {
-    width: 100%;
-    min-width: unset;
-  }
-
-  .network-badge {
-    font-size: 0.8rem;
-    padding: 5px 10px;
-  }
-
-  #connectBtn {
-    padding: 8px 16px;
-    font-size: 0.9rem;
   }
 }
