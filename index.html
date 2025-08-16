@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NadFolio</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <h1>NadFolio</h1>
+      <div class="header-right">
+        <div class="currency-selector">
+          <select id="currencySelect">
+            <option value="USD">USD ($)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
+            <option value="JPY">JPY (¥)</option>
+            <option value="NGN">NGN (₦)</option>
+          </select>
+        </div>
+        <span id="networkInfo" class="network-badge">Monad Testnet</span>
+        <button id="connectBtn">Connect Wallet</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <div class="balance-card">
+        <h2>Total Portfolio Value</h2>
+        <p id="totalBalance">$0.00</p>
+        <div class="balance-subtitle">across all tokens</div>
+      </div>
+
+      <div class="chart-container">
+        <div class="chart-header">
+          <h3>Portfolio Allocation</h3>
+        </div>
+        <div class="chart-wrapper">
+          <canvas id="portfolioChart"></canvas>
+          <div id="emptyChart" class="empty-state">
+            <div class="empty-icon">📊</div>
+            <p>No tokens found</p>
+            <span>Connect your wallet to view your portfolio</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tokens-section">
+        <div class="section-header">
+          <h3>Token Holdings</h3>
+          <div id="tokenCount" class="token-count">0 tokens</div>
+        </div>
+        
+        <div id="loadingMessage" class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>Loading portfolio data...</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <div class="token-list" id="tokenList"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-content">
+      <a href="https://twitter.com/nadfolio_dev" target="_blank" id="twitterBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+        </svg>
+        Follow Creator
+      </a>
+      <div class="footer-info">
+        <span>Built for Monad Testnet</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
