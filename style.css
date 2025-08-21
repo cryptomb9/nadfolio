@@ -56,11 +56,6 @@ header h1 {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
-  /* Ensure proper touch interaction on mobile */
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  user-select: none;
-  touch-action: manipulation;
 }
 
 .currency-selector select:hover {
@@ -94,17 +89,11 @@ header h1 {
   font-weight: 600;
   font-size: 0.95rem;
   transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
 }
 
 #connectBtn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(124, 58, 237, 0.3);
-}
-
-#connectBtn:active {
-  transform: translateY(0);
 }
 
 #connectBtn:disabled {
@@ -298,8 +287,6 @@ header h1 {
   border-radius: 16px;
   border: 1px solid rgba(248, 250, 252, 0.1);
   transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
 }
 
 .token-item:hover {
@@ -328,6 +315,8 @@ header h1 {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  font-weight: bold;
+  color: #e6edf3;
 }
 
 .token-icon img {
@@ -371,6 +360,13 @@ header h1 {
   font-size: 0.85rem;
   color: #6b7280;
   margin-top: 2px;
+}
+
+.token-source {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 2px;
+  text-transform: capitalize;
 }
 
 .token-value {
@@ -435,27 +431,18 @@ footer {
 @media (max-width: 768px) {
   .header-content {
     padding: 12px 16px;
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
-  /* Mobile currency selector fixes */
-  .currency-selector {
-    position: relative;
-    z-index: 1000;
+  .header-right {
+    gap: 12px;
   }
-  
+
   .currency-selector select {
-    font-size: 16px; /* Prevent iOS zoom */
-    min-height: 44px; /* Ensure proper touch target size */
-    padding: 12px 16px;
-    border-radius: 8px;
-    /* Remove any conflicting styles on mobile */
-    -webkit-appearance: menulist;
-    -moz-appearance: menulist;
-    appearance: menulist;
-    /* Ensure it's clickable */
-    pointer-events: auto;
-    position: relative;
-    z-index: 1001;
+    font-size: 16px;
+    min-height: 44px;
+    padding: 10px 14px;
   }
 
   .container {
@@ -482,10 +469,18 @@ footer {
 
   .token-item {
     padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 
   .token-info {
-    gap: 12px;
+    width: 100%;
+  }
+
+  .token-value {
+    width: 100%;
+    text-align: left;
   }
 
   .token-icon {
@@ -493,18 +488,17 @@ footer {
     height: 36px;
   }
 }
-/* Force dropdown to work on mobile */
-.currency-selector {
-  position: relative;
-  z-index: 9999; /* higher than header, charts, etc. */
-}
 
-.currency-selector select {
-  -webkit-appearance: menulist !important;
-  -moz-appearance: menulist !important;
-  appearance: menulist !important;
-  background: rgba(30, 41, 59, 1);
-  pointer-events: auto !important;
-  user-select: auto !important;
-  touch-action: auto !important;
+@media (max-width: 480px) {
+  header h1 {
+    font-size: 1.5rem;
+  }
+
+  #totalBalance {
+    font-size: 2rem;
+  }
+
+  .chart-wrapper {
+    height: 200px;
+  }
 }
